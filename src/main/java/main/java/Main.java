@@ -1,10 +1,12 @@
 package main.java;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Scanner;
 import java.util.stream.IntStream;
 
 public class Main {
+
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
         File file = new File("basket.txt");
@@ -13,7 +15,12 @@ public class Main {
         String[] products = {"Батон", "Сырники", "Пельмени", "Мука", "Творог"};
         int[] prices = {50, 220, 280, 80, 90};
 
-        Basket basket = null;
+        ConfigSettings settings = new ConfigSettings(new File("shop.xml"));
+        File loadFile = new File(settings.loadFile);
+        File saveFile = new File(settings.saveFile);
+        File logFile = new File(settings.logFile);
+        Basket basket = createBasket(loadFile, settings.enabledLoad, settings.loadFormat);
+        ClientLog clientLog = new ClientLog();
         if (file.exists()) {
             basket = Basket.loadFromJSONFile(jsonFile);
         } else {
@@ -24,23 +31,46 @@ public class Main {
                 .range(0, products.length)
                 .forEach(i1 -> System.out.println((i1 + 1) + " " + products[i1] + ":  " + prices[i1] + " " + " руб/шт "));
 
-        ClientLog clientLog = new ClientLog();
-
         while (true) {
             System.out.println("Выберите необходимый товар и количество через пробел или введите 'end'");
             String line = scanner.nextLine();
             if ("end".equals(line)) {
-                clientLog.exportAsCSV(csvFile);
+                if (settings.enabledLog) {
+                    clientLog.exportAsCSV(logFile);
+                }
                 break;
             }
             String[] parts = line.split(" ");
             int productNumber = Integer.parseInt(parts[0]) - 1;
             int productCont = Integer.parseInt(parts[1]);
             basket.addToCart(productNumber, productCont);
-            clientLog.log(productNumber + 1, productCont);
-            basket.saveJSON(jsonFile);
+            if (settings.enabledLog) {
+                clientLog.log(productNumber + 1, productCont);
+            }
+            if (settings.enabledSave) {
+                switch (settings.saveFormat) {
+                    case "json" -> basket.saveJSON(saveFile);
+                    case "txt" -> basket.saveTxt(saveFile);
+                }
+            }
         }
         basket.printCart();
     }
+
+    private static Basket createBasket(File loadFile, boolean enabledLoad, String loadFormat) throws IOException {
+        Basket basket;
+        if (enabledLoad && loadFile.exists()) {
+            basket = switch (loadFormat) {
+                case "json" -> Basket.loadFromJSONFile(loadFile);
+                case "txt" -> Basket.loadFromTxtFile(loadFile);
+                default -> new Basket();
+            };
+        } else {
+            basket = new Basket();
+        }
+        return basket;
+    }
 }
+
+
 
